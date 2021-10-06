@@ -69,11 +69,16 @@
           "type": "string",
           "default": "/coverage/coverage-final.json",
           "description": "Path to coverage json report"
+        },
+        "coverage.prefixPath": {
+          "type": "string",
+          "description": "Prefix path to source files"
         }
       }
     }
   },
   "dependencies": {
+    "@connectis/coverage-parser": "^1.0.8",
     "chokidar": "^3.5.1",
     "istanbul-lib-coverage": "^3.0.0",
     "lodash.debounce": "^4.0.8"

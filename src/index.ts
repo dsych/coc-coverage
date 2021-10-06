@@ -1,10 +1,11 @@
 import { Document, ExtensionContext, Uri, workspace } from 'coc.nvim';
 
 import chokidar from 'chokidar';
-import { createFileCoverage } from 'istanbul-lib-coverage';
+import parser from '@connectis/coverage-parser';
 import debounce from 'lodash.debounce';
 import fs from 'fs';
 import path from 'path';
+import { inspect } from 'util';
 
 const DEFAULT_REPORT_PATH = '/coverage/coverage-final.json';
 const signGroup = 'CocCoverage';
@@ -13,23 +14,28 @@ const cachedReport: { json: { [key: string]: any } } = {
 };
 
 function updateSign(doc: Document, sign: string, signGroup: string, signPriority: number) {
-  const filepath = Uri.parse(doc.uri).fsPath;
+  const filepath = fs.realpathSync(Uri.parse(doc.uri).fsPath);
   const workspaceDir = workspace.getWorkspaceFolder(doc.uri);
   const relativeFilepath = workspaceDir ? path.relative(workspaceDir.uri, doc.uri) : '';
   const stats = cachedReport.json[filepath] || cachedReport.json[relativeFilepath];
+
   if (stats) {
-    const fileCoverage = createFileCoverage(stats);
-    const uncoveredLines = fileCoverage.getUncoveredLines();
-    const summary = fileCoverage.toSummary();
-    workspace.nvim.setVar('coc_coverage_branches_pct', `${summary.branches.pct}`, true);
-    workspace.nvim.setVar('coc_coverage_lines_pct', `${summary.lines.pct}`, true);
-    workspace.nvim.setVar('coc_coverage_functions_pct', `${summary.functions.pct}`, true);
-    workspace.nvim.setVar('coc_coverage_statements_pct', `${summary.statements.pct}`, true);
+    workspace.nvim.setVar('coc_coverage_branches_pct', `${stats.branches.found}`, true);
+    workspace.nvim.setVar('coc_coverage_lines_pct', `${stats.lines.found}`, true);
+    workspace.nvim.setVar('coc_coverage_functions_pct', `${stats.functions.found}`, true);
+    // not supported by lcov
+    workspace.nvim.setVar('coc_coverage_statements_pct', `0`, true);
 
     workspace.nvim.pauseNotification();
     workspace.nvim.call('sign_unplace', [signGroup, { buffer: doc.bufnr }], true);
-    uncoveredLines.forEach((lnum) => {
-      workspace.nvim.call('sign_place', [0, signGroup, sign, doc.bufnr, { lnum: lnum, priority: signPriority }], true);
+    stats.lines.details.forEach((lnum) => {
+      if (lnum.hit <= 0) {
+        workspace.nvim.call(
+          'sign_place',
+          [0, signGroup, sign, doc.bufnr, { lnum: lnum.line, priority: signPriority }],
+          true
+        );
+      }
     });
     workspace.nvim.resumeNotification(false, true);
   }
@@ -42,25 +48,35 @@ export async function activate(context: ExtensionContext): Promise<void> {
     return;
   }
 
+  const { logger } = context;
+
   const signPriority = config.get<number>('signPriority', 10);
   const uncoveredSign = config.get<string>('uncoveredSign.text', '▣');
   const hlGroup = config.get<string>('uncoveredSign.hlGroup', 'UncoveredLine');
   const reportPath = config.get<string>('jsonReportPath', DEFAULT_REPORT_PATH);
+  const baseDir = config.get<string>('prefixPath', process.cwd());
 
-  const debounceReadFile = debounce((path) => {
-    const str = fs.readFileSync(path).toString();
-    const json = JSON.parse(str);
-    cachedReport.json = json;
+  const debounceReadFile = debounce((tpath) => {
+    parser.parseFile(tpath, { type: 'jacoco', pathMode: 'unmodified' }).then((results) => {
+      const mapped = {};
 
-    workspace.document.then((doc) => {
-      updateSign(doc, 'CocCoverageUncovered', signGroup, signPriority);
+      results.forEach((entry) => (mapped[path.join(baseDir, entry.file)] = entry));
+
+      cachedReport.json = mapped;
+
+      workspace.document.then((doc) => {
+        updateSign(doc, 'CocCoverageUncovered', signGroup, signPriority);
+      });
     });
   }, 2000);
 
   function startWatch(path: string) {
     if (fs.existsSync(path)) {
       // Initial read
+      logger.info(`Started watching ${path}`);
       debounceReadFile(path);
+    } else {
+      logger.error(`Unable to find ${path}`);
     }
 
     // Start watcher
