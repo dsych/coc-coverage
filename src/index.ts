@@ -76,7 +76,20 @@ const debounceReadFile = debounce((tpath, baseDir) => {
   parser.parseFile(tpath, { type: 'jacoco', pathMode: 'unmodified' }).then((results) => {
     const mapped = {};
 
-    results.forEach((entry) => (mapped[path.join(baseDir, entry.file)] = entry));
+    results.forEach((entry) => {
+      if (entry?.branches?.details) {
+        // go through all present branches and calculate if all of them were taken
+        entry.branches.converted = {};
+        entry.branches.details.forEach((b) => {
+          if (entry.branches.converted[b.line] == null) {
+            entry.branches.converted[b.line] = true;
+          }
+
+          entry.branches.converted[b.line] &&= b.taken === 1;
+        });
+      }
+      mapped[path.join(baseDir, entry.file)] = entry;
+    });
 
     cachedReport.json = mapped;
 
@@ -129,7 +142,11 @@ const updateSigns = (doc: Document, stats: any) => {
 
   stats.lines.details.forEach((lnum: { hit: number; line: number }) => {
     // TODO: account for branches as well
-    const sign = lnum.hit <= 0 ? 'CocCoverageUncovered' : 'CocCoverageCovered';
+    let sign = 'CocCoverageUncovered';
+    if (lnum.hit > 0) {
+      // could either be missing if no branches at current line or all branches could be taken
+      sign = stats?.branches?.converted[lnum.line] !== false ? 'CocCoverageCovered' : 'CocCoverageMissingBranch';
+    }
 
     workspace.nvim.call(
       'sign_place',
