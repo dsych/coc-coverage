@@ -1,4 +1,4 @@
-import { commands, Document, ExtensionContext, Uri, workspace } from 'coc.nvim';
+import { commands, Document, ExtensionContext, Uri, window, workspace } from 'coc.nvim';
 
 import chokidar from 'chokidar';
 import parser from '@connectis/coverage-parser';
@@ -12,6 +12,7 @@ const signGroup = 'CocCoverage';
 const cachedReport: { json: { [key: string]: any } } = {
   json: {},
 };
+
 let fileWatcher: chokidar.FSWatcher;
 
 export const activate = async (context: ExtensionContext): Promise<void> => {
@@ -38,7 +39,6 @@ export const activate = async (context: ExtensionContext): Promise<void> => {
   context.subscriptions.push(
     workspace.registerAutocmd({
       event: ['BufEnter'],
-      request: true,
       callback: refresh,
     }),
     commands.registerCommand('coverage.refreshCurrentFile', refresh)
@@ -56,7 +56,7 @@ const startWatch = (path: string, baseDir: string) => {
     console.info(`Started watching ${path}`);
     debounceReadFile(path, baseDir);
   } else {
-    console.error(`Unable to find ${path}`);
+    window.showErrorMessage(`Unable to find ${path}`);
   }
 
   // Start watcher
@@ -106,10 +106,12 @@ const refresh = async () => {
 
 const updateSign = (doc: Document) => {
   const filepath = getCorrectPath(doc);
+
+  if (!filepath) return;
+
   const stats = cachedReport.json[filepath];
 
   if (stats) {
-    console.log('found: ', inspect(stats, false, null, false));
     updateStatusLine(stats);
 
     workspace.nvim.pauseNotification();
@@ -121,7 +123,12 @@ const updateSign = (doc: Document) => {
 };
 
 const getCorrectPath = (doc: Document) => {
-  const filepath = fs.realpathSync(Uri.parse(doc.uri).fsPath);
+  let filepath: string;
+  try {
+    filepath = fs.realpathSync(Uri.parse(doc.uri).fsPath);
+  } catch (e) {
+    return null;
+  }
   const workspaceDir = workspace.getWorkspaceFolder(doc.uri);
   const relativeFilepath = workspaceDir ? path.relative(workspaceDir.uri, doc.uri) : '';
 
