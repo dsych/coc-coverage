@@ -6,9 +6,7 @@
   "repository": "https://github.com/ruanyl/coc-coverage",
   "license": "MIT",
   "main": "lib/index.js",
-  "keywords": [
-    "coc.nvim"
-  ],
+  "keywords": ["coc.nvim"],
   "engines": {
     "coc": "^0.0.80"
   },
@@ -42,9 +40,7 @@
     "standard-version": "^9.2.0",
     "typescript": "^4.1.2"
   },
-  "activationEvents": [
-    "*"
-  ],
+  "activationEvents": ["*"],
   "contributes": {
     "configuration": {
       "type": "object",
@@ -55,17 +51,22 @@
           "default": true,
           "description": "Enable coc-coverage extension"
         },
-        "coverage.uncoveredSign.text": {
+        "coverage.uncoveredSign.incompleteBranch": {
           "type": "string",
-          "default": "▣",
+          "default": "█",
+          "description": "Sign to display on lines with incomplete branches"
+        },
+        "coverage.uncoveredSign.uncovered": {
+          "type": "string",
+          "default": "█",
           "description": "Sign to display on uncovered lines"
         },
-        "coverage.uncoveredSign.hlGroup": {
+        "coverage.uncoveredSign.covered": {
           "type": "string",
-          "default": "UncoveredLine",
-          "description": "Uncovered sign color"
+          "default": "█",
+          "description": "Sign to display on covered lines"
         },
-        "coverage.jsonReportPath": {
+        "coverage.reportPath": {
           "type": "string",
           "default": "/coverage/coverage-final.json",
           "description": "Path to coverage json report"
@@ -73,9 +74,20 @@
         "coverage.prefixPath": {
           "type": "string",
           "description": "Prefix path to source files"
+        },
+        "coverage.signPriority": {
+          "type": "string",
+          "default": 10,
+          "description": "Sign priority"
         }
       }
-    }
+    },
+    "commands": [
+      {
+        "command": "coverage.refreshCurrentFile",
+        "title": "Refresh coverage signs for the current file"
+      }
+    ]
   },
   "dependencies": {
     "@connectis/coverage-parser": "^1.0.8",
